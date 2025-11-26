@@ -3,9 +3,20 @@
 #include <string.h>
 #include <locale.h>
 
-struct Student {
+struct Date {
+    int day;
+    char* month;
+    int year;
+};
+
+struct FIO {
     char* surname;
     char* name;
+};
+
+struct Student {
+    struct FIO fio;
+    struct Date birth;
     char* direction;
     int group;
 };
@@ -26,15 +37,14 @@ void clearInputBuffer() {
 
 void addStudent(struct Student** arr, int* n) {
     struct Student s;
-    printf("Введите фамилию: ");
-    s.surname = inputString();
-    printf("Введите имя: ");
-    s.name = inputString();
-    printf("Введите направление (например ПИН): ");
-    s.direction = inputString();
-    printf("Введите номер группы: ");
-    scanf("%d", &s.group);
-    clearInputBuffer();
+    printf("Фамилия: "); s.fio.surname = inputString();
+    printf("Имя: "); s.fio.name = inputString();
+    printf("Направление: "); s.direction = inputString();
+    printf("Номер группы: "); scanf("%d", &s.group); clearInputBuffer();
+    printf("Дата рождения (день месяц год): ");
+    scanf("%d", &s.birth.day); clearInputBuffer();
+    s.birth.month = inputString();
+    scanf("%d", &s.birth.year); clearInputBuffer();
 
     *arr = (struct Student*)realloc(*arr, (*n + 1) * sizeof(struct Student));
     (*arr)[*n] = s;
@@ -42,125 +52,139 @@ void addStudent(struct Student** arr, int* n) {
 }
 
 void printTable(struct Student* arr, int n) {
-    printf("\n-------------------------------------------------------------\n");
-    printf("%-15s %-15s %-15s %-10s\n", "Фамилия", "Имя", "Направление", "Группа");
-    printf("-------------------------------------------------------------\n");
+    printf("\n---------------------------------------------------------------\n");
+    printf("%-15s %-15s %-10s %-10s %-10s %-10s\n", 
+           "Фамилия", "Имя", "Направление", "Группа", "Дата", "Год");
+    printf("---------------------------------------------------------------\n");
     for (int i = 0; i < n; i++) {
-        printf(arr[i].surname);
-
-        printf("%-15s %-15s %-15s %-10d\n",
-               arr[i].surname, arr[i].name, arr[i].direction, arr[i].group);
+        printf("%-15s %-15s %-10s %-10d %-2d %-10s %-4d\n",
+               arr[i].fio.surname, arr[i].fio.name, arr[i].direction,
+               arr[i].group, arr[i].birth.day, arr[i].birth.month, arr[i].birth.year);
     }
 }
 
-void findByDirection(struct Student* arr, int n) {
-    printf("Введите направление: ");
-    char* dir = inputString();
-    int found = 0;
-    for (int i = 0; i < n; i++) {
-        if (strcmp(arr[i].direction, dir) == 0) {
-            printf("%s %s, группа %d\n", arr[i].surname, arr[i].name, arr[i].group);
-            found = 1;
+void findYoungestOldest(struct Student* arr, int n) {
+    if (n == 0) return;
+    int youngest = 0, oldest = 0;
+    for (int i = 1; i < n; i++) {
+        struct Date d1 = arr[i].birth;
+        struct Date y = arr[youngest].birth;
+        struct Date o = arr[oldest].birth;
+        if (d1.year > y.year || 
+            (d1.year == y.year && d1.month[0] > y.month[0]) ||
+            (d1.year == y.year && strcmp(d1.month, y.month) == 0 && d1.day > y.day)) {
+            youngest = i;
+        }
+        if (d1.year < o.year || 
+            (d1.year == o.year && d1.month[0] < o.month[0]) ||
+            (d1.year == o.year && strcmp(d1.month, o.month) == 0 && d1.day < o.day)) {
+            oldest = i;
         }
     }
-    if (!found) printf("Нет студентов по данному направлению.\n");
-    free(dir);
+    printf("Самый молодой студент: %s %s, %d %s %d\n",
+           arr[youngest].fio.surname, arr[youngest].fio.name,
+           arr[youngest].birth.day, arr[youngest].birth.month, arr[youngest].birth.year);
+    printf("Самый старший студент: %s %s, %d %s %d\n",
+           arr[oldest].fio.surname, arr[oldest].fio.name,
+           arr[oldest].birth.day, arr[oldest].birth.month, arr[oldest].birth.year);
 }
 
-int cmpStudents(const void* a, const void* b) {
-    const struct Student* s1 = (const struct Student*)a;
-    const struct Student* s2 = (const struct Student*)b;
-    return strcmp(s1->surname, s2->surname);
-}
-
-void findGroupSorted(struct Student* arr, int n) {
-    printf("Введите направление: ");
-    char* dir = inputString();
-    printf("Введите номер группы: ");
-    int g;
-    scanf("%d", &g);
-    clearInputBuffer();
-
-    struct Student* result = NULL;
-    int m = 0;
-
+void saveToFile(struct Student* arr, int n, const char* filename) {
+    FILE* f = fopen(filename, "wb");
+    fwrite(&n, sizeof(int), 1, f);
     for (int i = 0; i < n; i++) {
-        if (strcmp(arr[i].direction, dir) == 0 && arr[i].group == g) {
-            result = (struct Student*)realloc(result, (m + 1) * sizeof(struct Student));
-            result[m] = arr[i];
-            m++;
-        }
+        int len = strlen(arr[i].fio.surname) + 1;
+        fwrite(&len, sizeof(int), 1, f);
+        fwrite(arr[i].fio.surname, sizeof(char), len, f);
+
+        len = strlen(arr[i].fio.name) + 1;
+        fwrite(&len, sizeof(int), 1, f);
+        fwrite(arr[i].fio.name, sizeof(char), len, f);
+
+        len = strlen(arr[i].direction) + 1;
+        fwrite(&len, sizeof(int), 1, f);
+        fwrite(arr[i].direction, sizeof(char), len, f);
+
+        fwrite(&arr[i].group, sizeof(int), 1, f);
+        fwrite(&arr[i].birth.day, sizeof(int), 1, f);
+
+        len = strlen(arr[i].birth.month) + 1;
+        fwrite(&len, sizeof(int), 1, f);
+        fwrite(arr[i].birth.month, sizeof(char), len, f);
+
+        fwrite(&arr[i].birth.year, sizeof(int), 1, f);
     }
+    fclose(f);
+}
 
-    if (m == 0) {
-        printf("Нет студентов в группе %s-%d.\n", dir, g);
-        free(dir);
-        return;
+struct Student* loadFromFile(int* n, const char* filename) {
+    FILE* f = fopen(filename, "rb");
+    if (!f) return NULL;
+    fread(n, sizeof(int), 1, f);
+    struct Student* arr = (struct Student*)malloc((*n) * sizeof(struct Student));
+    for (int i = 0; i < *n; i++) {
+        int len;
+        fread(&len, sizeof(int), 1, f);
+        arr[i].fio.surname = (char*)malloc(len); fread(arr[i].fio.surname, sizeof(char), len, f);
+
+        fread(&len, sizeof(int), 1, f);
+        arr[i].fio.name = (char*)malloc(len); fread(arr[i].fio.name, sizeof(char), len, f);
+
+        fread(&len, sizeof(int), 1, f);
+        arr[i].direction = (char*)malloc(len); fread(arr[i].direction, sizeof(char), len, f);
+
+        fread(&arr[i].group, sizeof(int), 1, f);
+        fread(&arr[i].birth.day, sizeof(int), 1, f);
+
+        fread(&len, sizeof(int), 1, f);
+        arr[i].birth.month = (char*)malloc(len); fread(arr[i].birth.month, sizeof(char), len, f);
+
+        fread(&arr[i].birth.year, sizeof(int), 1, f);
     }
-
-    qsort(result, m, sizeof(struct Student), cmpStudents);
-
-    printf("\nСтуденты группы %s-%d (отсортировано):\n", dir, g);
-    for (int i = 0; i < m; i++) {
-        printf("%s %s\n", result[i].surname, result[i].name);
-    }
-
-    free(result);
-    free(dir);
+    fclose(f);
+    return arr;
 }
 
 int main() {
     setlocale(LC_ALL, "Russian");
-
     struct Student* students = NULL;
     int n = 0;
+    const char* filename = "students.dat";
 
-    do {
-        printf("Введите число студентов n (не меньше 8): ");
-        scanf("%d", &n);
-        clearInputBuffer();
-    } while (n < 1);
-
-    students = (struct Student*)malloc(n * sizeof(struct Student));
-
-    for (int i = 0; i < n; i++) {
-        printf("\nСтудент %d:\n", i + 1);
-        printf("Фамилия: ");
-        students[i].surname = inputString();
-        printf("Имя: ");
-        students[i].name = inputString();
-        printf("Направление: ");
-        students[i].direction = inputString();
-        printf("Номер группы: ");
-        scanf("%d", &students[i].group);
-        clearInputBuffer();
+    students = loadFromFile(&n, filename);
+    if (!students) {
+        printf("Файл базы данных вуза не обнаружен. Ввод с клавиатуры.\n");
+        do {
+            printf("Введите число студентов (не меньше 8): ");
+            scanf("%d", &n); clearInputBuffer();
+        } while (n < 1);
+        students = (struct Student*)malloc(n * sizeof(struct Student));
+        for (int i = 0; i < n; i++) {
+            printf("\nСтудент %d:\n", i + 1);
+            addStudent(&students, &i); i--;
+        }
+    } else {
+        printf("База данных студентов вуза найдена и загружена");
     }
 
     int choice = 0;
     while (1) {
-        printf("\n================ МЕНЮ ================\n");
-        printf("1. Добавить студента\n");
-        printf("2. Вывести таблицу\n");
-        printf("3. Найти по направлению\n");
-        printf("4. Найти группу и отсортировать\n");
-        printf("5. Выход\n");
-        printf("Введите выбор: ");
-
-        scanf("%d", &choice);
-        clearInputBuffer();
-
+        printf("\n1. Добавить студента\n2. Вывести таблицу\n3. Найти самого молодого/старшего\n4. Выход\nВведите выбор: ");
+        scanf("%d", &choice); clearInputBuffer();
         if (choice == 1) addStudent(&students, &n);
         else if (choice == 2) printTable(students, n);
-        else if (choice == 3) findByDirection(students, n);
-        else if (choice == 4) findGroupSorted(students, n);
-        else if (choice == 5) break;
-        else printf("Неверный выбор.\n");
+        else if (choice == 3) findYoungestOldest(students, n);
+        else if (choice == 4) break;
+        else printf("Неверный выбор\n");
     }
 
+    saveToFile(students, n, filename);
+
     for (int i = 0; i < n; i++) {
-        free(students[i].surname);
-        free(students[i].name);
+        free(students[i].fio.surname);
+        free(students[i].fio.name);
         free(students[i].direction);
+        free(students[i].birth.month);
     }
     free(students);
 
